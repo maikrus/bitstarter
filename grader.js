@@ -22,6 +22,7 @@ References:
 */
 
 var fs = require('fs');
+var rest = require('restler');
 var program = require('commander');
 var cheerio = require('cheerio');
 var HTMLFILE_DEFAULT = "index.html";
@@ -61,14 +62,37 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
+
 if(require.main == module) {
     program
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
+	.option('-u, --url <url>', 'Path to URL')
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    if (program.url != null) {
+        var outfile = "index_from_url.txt"; // a temporary file name
+        if(fs.existsSync(outfile)) { // check and remove the file if it's already there
+                fs.unlinkSync(outfile);
+        }
+        rest.get(program.url).on('complete', function(result) {
+	    if (result instanceof Error) {
+                console.log('Error: ' + result.message);
+	//      this.retry(5000); // try again after 5 sec
+            } else {
+ 		fs.writeFileSync(outfile, result);   
+    		var checkJson = checkHtmlFile(outfile, program.checks);
+    		var outJson = JSON.stringify(checkJson, null, 4);
+    		console.log(outJson);
+		if(fs.existsSync(outfile)) { // check and remove the output temporary file
+                    fs.unlinkSync(outfile);
+                }
+            }
+	});
+    } else {
+       var checkJson = checkHtmlFile(program.file, program.checks);
+       var outJson = JSON.stringify(checkJson, null, 4);
+       console.log(outJson);
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
